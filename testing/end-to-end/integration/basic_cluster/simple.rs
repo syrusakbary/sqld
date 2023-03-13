@@ -110,3 +110,67 @@ async fn replica_catch_up(app: App) {
     let json: serde_json::Value = resp.json().await.unwrap();
     insta::assert_json_snapshot!(json);
 }
+
+#[octopod::test(app = "simple-cluster")]
+async fn transactional_batch(app: App) {
+    let replica_ip = app.service("replica").unwrap().ip().await.unwrap();
+    let primary_ip = app.service("primary").unwrap().ip().await.unwrap();
+    let primary_url = format!("http://{primary_ip}:8080/");
+    let replica_url = format!("http://{replica_ip}:8080/");
+    let client = reqwest::Client::new();
+
+    let payload = json!({ "statements": [
+        "begin",
+        "create table test (x)",
+        "select * from unkown",
+        "end"
+    ] });
+    let resp = client
+        .post(&replica_url)
+        .json(&payload)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let payload = json!({ "statements": [format!("select * from test")] });
+    let resp = client
+        .post(&primary_url)
+        .json(&payload)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let json: serde_json::Value = resp.json().await.unwrap();
+    insta::assert_json_snapshot!(json);
+}
+
+#[octopod::test(app = "simple-cluster")]
+async fn non_transactional_batch_statement_failure(app: App) {
+    let replica_ip = app.service("replica").unwrap().ip().await.unwrap();
+    let primary_ip = app.service("primary").unwrap().ip().await.unwrap();
+    let primary_url = format!("http://{primary_ip}:8080/");
+    let replica_url = format!("http://{replica_ip}:8080/");
+    let client = reqwest::Client::new();
+
+    let payload = json!({ "statements": [
+        "create table test (x)",
+        "select * from unkown",
+    ] });
+    let resp = client
+        .post(&replica_url)
+        .json(&payload)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let payload = json!({ "statements": [format!("select * from test")] });
+    let resp = client
+        .post(&primary_url)
+        .json(&payload)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let json: serde_json::Value = resp.json().await.unwrap();
+    insta::assert_json_snapshot!(json);
+}
