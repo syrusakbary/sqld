@@ -3,7 +3,11 @@ use std::{env, fs, net::SocketAddr, path::PathBuf, time::Duration};
 use anyhow::{bail, Context as _, Result};
 use clap::Parser;
 use sqld::Config;
+use tikv_jemallocator::Jemalloc;
 use tracing_subscriber::filter::LevelFilter;
+
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
 
 /// SQL daemon
 #[derive(Debug, Parser)]
